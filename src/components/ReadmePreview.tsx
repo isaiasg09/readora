@@ -9,6 +9,7 @@ interface ReadmePreviewProps {
 
 export default function ReadmePreview({ content }: ReadmePreviewProps) {
   // Componentes customizados para renderizar corretamente o markdown
+  // Cada elemento markdown recebe um estilo específico para ficar legível no tema escuro.
   const components: Partial<Components> = {
     h1: ({ children }: { children?: ReactNode }) => (
       <h1 className="text-2xl font-bold text-white border-b border-zinc-700 pb-2 mb-4 mt-6">
@@ -114,6 +115,7 @@ export default function ReadmePreview({ content }: ReadmePreviewProps) {
 
   return (
     <div className="flex flex-col gap-3 h-full">
+      {/* O preview fica sempre ao lado do editor para mostrar o resultado final imediatamente. */}
       <span className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
         Preview
       </span>

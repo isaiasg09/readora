@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-// GET — retorna todos os READMEs salvos, do mais recente pro mais antigo
+// GET — retorna todos os READMEs salvos, do mais recente para o mais antigo.
+// Isso alimenta a tela de histórico.
 export async function GET() {
   try {
+    // A ordenação descendente deixa o conteúdo recém-gerado no topo da lista.
     const readmes = await prisma.readme.findMany({
       orderBy: { createdAt: "desc" },
     });
@@ -18,9 +20,11 @@ export async function GET() {
   }
 }
 
-// DELETE — deleta um README pelo id passado como query param (?id=...)
+// DELETE — deleta um README pelo id passado como query param (?id=...).
+// A rota é simples porque o histórico só precisa remover um registro por vez.
 export async function DELETE(req: NextRequest) {
   try {
+    // O id vem na query string para evitar criar um corpo desnecessário para essa operação.
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 

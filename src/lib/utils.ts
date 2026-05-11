@@ -1,5 +1,5 @@
-// Formata uma data para o padrão brasileiro: dd/mm/aaaa hh:mm
-// Usado pra exibir as datas no histórico de READMEs
+// Formata uma data para o padrão brasileiro: dd/mm/aaaa hh:mm.
+// Centralizar isso evita espalhar lógica de apresentação de data pela interface.
 export function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",

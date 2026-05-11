@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 export default function HistoryPage() {
   const router = useRouter();
+  // Lista de READMEs carregados do banco e estado de carregamento da tela.
   const [readmes, setReadmes] = useState<Readme[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -14,6 +15,7 @@ export default function HistoryPage() {
   useEffect(() => {
     async function fetchHistory() {
       try {
+        // Carrega todos os registros salvos para que o usuário possa revisitar ou editar depois.
         const res = await fetch("/api/readme");
         const data = await res.json();
         setReadmes(data);
@@ -29,11 +31,13 @@ export default function HistoryPage() {
 
   // Remove o README deletado da lista local sem precisar rebuscar tudo
   function handleDelete(id: string) {
+    // Atualiza a UI imediatamente depois da exclusão bem-sucedida na API.
     setReadmes((prev) => prev.filter((r) => r.id !== id));
   }
 
   // Navega para a página de edição do README clicado
   function handleEdit(readme: Readme) {
+    // O histórico funciona como atalho para a tela completa de edição.
     router.push(`/editor/${readme.id}`);
   }
 
@@ -49,6 +53,7 @@ export default function HistoryPage() {
       {loading ? (
         <p className="text-zinc-500 text-sm">Carregando...</p>
       ) : (
+        // A lista concentra as ações de editar e deletar em um único lugar.
         <HistoryList
           readmes={readmes}
           onDelete={handleDelete}

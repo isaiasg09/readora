@@ -14,6 +14,7 @@ export default function ReadmeEditor({
   initialContent,
   onSave,
 }: ReadmeEditorProps) {
+  // O conteúdo local permite edição sem depender de nova ida ao servidor a cada tecla.
   const [content, setContent] = useState(initialContent);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -21,6 +22,7 @@ export default function ReadmeEditor({
 
   // Salva o conteúdo editado chamando a rota PATCH /api/readme/[id]
   async function handleSave() {
+    // O fluxo de save atualiza backend e front ao mesmo tempo para evitar divergência.
     setSaving(true);
     setError("");
     setSaved(false);
@@ -52,6 +54,7 @@ export default function ReadmeEditor({
 
   // Faz o download do conteúdo como arquivo .md
   function handleExport() {
+    // Exportação direta útil quando o usuário só quer baixar o arquivo final.
     const blob = new Blob([content], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -66,6 +69,7 @@ export default function ReadmeEditor({
   return (
     <div className="flex flex-col gap-3 h-full">
       {/* Barra de ações */}
+      {/* Esta barra concentra salvar e exportar, que são as duas saídas principais do editor. */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
           Editor
@@ -88,6 +92,7 @@ export default function ReadmeEditor({
       </div>
 
       {/* Área de edição do markdown */}
+      {/* Textarea simples: o preview ao lado é o responsável pela renderização rica do markdown. */}
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}

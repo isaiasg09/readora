@@ -19,9 +19,11 @@ export default function HistoryList({
   onEdit,
 }: HistoryListProps) {
   // Guarda o id do README que está sendo deletado para mostrar loading no botão certo
+  // Isso evita travar a lista inteira enquanto uma única exclusão acontece.
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
+    // Mantém o feedback visual localizado no item que está sendo removido.
     setDeletingId(id);
 
     try {
@@ -63,6 +65,7 @@ export default function HistoryList({
           className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors"
         >
           {/* Informações do README */}
+          {/* Exibe um resumo rápido para que o histórico funcione como uma vitrine compacta. */}
           <div className="flex flex-col gap-1 min-w-0">
             <span className="text-sm font-medium text-white truncate">
               {readme.title}
@@ -85,6 +88,7 @@ export default function HistoryList({
           </div>
 
           {/* Ações */}
+          {/* Editar e deletar ficam lado a lado para facilitar manutenção do histórico. */}
           <div className="flex gap-2 shrink-0 ml-4">
             <button
               onClick={() => onEdit(readme)}

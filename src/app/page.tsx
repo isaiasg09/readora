@@ -8,15 +8,19 @@ import { useState } from "react";
 
 export default function Home() {
   const router = useRouter();
+  // Quando existe conteúdo gerado, a página entra no modo de edição/preview.
   const [generatedContent, setGeneratedContent] = useState("");
+  // Guarda o id persistido para permitir abrir a versão completa do README depois.
   const [readmeId, setReadmeId] = useState("");
 
   function handleGenerate(content: string, id: string) {
+    // A geração preenche os dois estados ao mesmo tempo: texto e referência no banco.
     setGeneratedContent(content);
     setReadmeId(id);
   }
 
   function handleSave(content: string) {
+    // Mantém o preview sincronizado com o editor depois de salvar.
     setGeneratedContent(content);
   }
 
@@ -32,6 +36,7 @@ export default function Home() {
           >
             ← Gerar novo
           </button>
+          {/* Abre a mesma leitura em uma tela dedicada, útil para edição mais confortável. */}
           <button
             onClick={() => router.push(`/editor/${readmeId}`)}
             className="text-sm text-zinc-400 hover:text-white transition-colors"

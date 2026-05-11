@@ -11,9 +11,17 @@ interface GenerateRequestBody {
   usage: string;
   author: string;
   license: string;
+  language: string;
   sections: string[];
   template: string;
   repoUrl?: string; // opcional — só preenchido se o usuário informar um repo do GitHub
+}
+
+function getLanguageInstruction(language: string): string {
+  // Traduz a escolha do seletor para uma instrução clara no prompt.
+  if (language === "pt-BR") return "Portuguese (Brazilian Portuguese)";
+  if (language === "en-US") return "English";
+  return "the same language most consistent with the repository content";
 }
 
 export async function POST(req: NextRequest) {
@@ -29,12 +37,14 @@ export async function POST(req: NextRequest) {
       usage,
       author,
       license,
+      language,
       sections,
       template,
       repoUrl,
     } = body;
 
-    // Validação básica — nome e descrição são obrigatórios
+    // Validação básica — nome e descrição são obrigatórios.
+    // São os campos mínimos para a IA ter contexto suficiente sem gerar ruído.
     if (!name || !description) {
       return NextResponse.json(
         { error: "Nome e descrição são obrigatórios" },
@@ -42,11 +52,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Monta o prompt que será enviado para o generateReadme
-    // Quanto mais detalhado o prompt, melhor o resultado gerado
-    // usa template literals para inserir as variáveis no prompt de forma dinâmica e clara
+    // Monta o prompt que será enviado para o generateReadme.
+    // A ideia aqui é transformar o estado do formulário em instruções objetivas para a IA,
+    // reduzindo ambiguidades e forçando a saída no idioma escolhido.
     const prompt = `
       You are a technical writer. Generate a professional, well-structured README.md in Markdown for the following project.
+
+      Write the entire README in ${getLanguageInstruction(language)}.
+      Keep headings, sections, explanatory text, and notes in that language.
+      If language is set to auto, infer the best language from the repository context.
 
       Project info:
       - Name: ${name}
@@ -68,10 +82,12 @@ export async function POST(req: NextRequest) {
       - Output ONLY the raw Markdown, no explanation, no code fences
     `;
 
-    // Chama o generateReadme() e aguarda o README gerado
+    // Chama o generateReadme() e aguarda o README gerado.
+    // O retorno já vem pronto para salvar no banco e exibir no preview.
     const content = await generateReadme(prompt);
 
-    // Salva o README gerado no banco de dados para o histórico
+    // Salva o README gerado no banco de dados para o histórico.
+    // Isso permite voltar depois e editar/exportar sem refazer a geração.
     const readme = await prisma.readme.create({
       data: {
         title: name,

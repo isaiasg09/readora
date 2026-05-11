@@ -10,6 +10,7 @@ export default function EditorPage() {
   // Pega o id da URL — ex: /editor/abc123 → id = "abc123"
   const { id } = useParams<{ id: string }>();
 
+  // Estado local do README carregado da API e feedback de carregamento/erro.
   const [readme, setReadme] = useState<Readme | null>(null);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -19,6 +20,7 @@ export default function EditorPage() {
   useEffect(() => {
     async function fetchReadme() {
       try {
+        // Esta rota devolve o conteúdo salvo para permitir edição posterior.
         const res = await fetch(`/api/readme/${id}`);
 
         if (!res.ok) {
@@ -41,6 +43,7 @@ export default function EditorPage() {
 
   // Atualiza o conteúdo local após salvar no editor
   function handleSave(newContent: string) {
+    // A página inteira reage ao save porque o preview depende desse mesmo estado.
     setContent(newContent);
   }
 
@@ -66,6 +69,7 @@ export default function EditorPage() {
       </div>
 
       {/* Editor e preview lado a lado em tela cheia */}
+      {/* Esse layout privilegia comparação imediata entre código bruto e renderização final. */}
       <div className="grid grid-cols-2 gap-6">
         <ReadmeEditor id={id} initialContent={content} onSave={handleSave} />
         <ReadmePreview content={content} />

@@ -16,6 +16,8 @@ interface ReadmeFormProps {
 
 export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
   // Estado do formulário com valores padrão
+  // Esses valores são enviados para a rota de geração e também podem ser
+  // preenchidos automaticamente quando o usuário importa um repositório.
   const [form, setForm] = useState<ReadmeFormData>({
     name: "",
     stack: "",
@@ -24,11 +26,13 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
     usage: "",
     author: "",
     license: "MIT",
+    language: "pt-BR",
     sections: ["features", "install", "usage", "license", "badges"],
     template: "default",
   });
 
   // Estados de controle da UI
+  // Eles servem apenas para feedback visual: carregamento, erro e URL do repo.
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
@@ -74,13 +78,17 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
         return;
       }
 
-      // Pré-preenche o formulário com os dados do repositório
+      // Pré-preenche o formulário com os dados do repositório.
+      // A rota do GitHub já devolve o que conseguiu inferir dos arquivos lidos,
+      // então aqui só copiamos para o formulário e deixamos o usuário revisar.
       setForm((prev) => ({
         ...prev,
         name: data.name,
         description: data.description,
         stack: data.language,
         license: data.license,
+        install: data.install,
+        usage: data.usage,
         author: data.author.name,
         repoUrl,
       }));
@@ -96,6 +104,7 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
     e.preventDefault();
     setError("");
 
+    // Mantém a validação simples no cliente para evitar chamadas desnecessárias.
     if (!form.name || !form.description) {
       setError("Nome e descrição são obrigatórios.");
       return;
@@ -104,6 +113,7 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
     setLoading(true);
 
     try {
+      // Envia o estado inteiro do formulário; a API decide como transformar isso em README.
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -117,7 +127,7 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
         return;
       }
 
-      // Chama a função do componente pai com o conteúdo gerado e o id salvo
+      // Entrega o conteúdo gerado para o componente pai, que atualiza preview e editor.
       onGenerate(data.content, data.id);
     } catch {
       setError("Erro ao conectar com o servidor.");
@@ -154,7 +164,32 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
 
       <div className="h-px bg-zinc-800" />
 
+      {/* Idioma do README */}
+      {/* Esse campo define o idioma final do texto gerado, mesmo quando o repo estiver em outro idioma. */}
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
+          Idioma do README
+        </label>
+        <select
+          name="language"
+          value={form.language}
+          onChange={handleChange}
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-zinc-500"
+        >
+          <option value="pt-BR">Português</option>
+          <option value="en-US">Inglês</option>
+          <option value="auto">Automático pelo repositório</option>
+        </select>
+        <p className="text-xs text-zinc-500">
+          Use automático se quiser que a IA siga o idioma predominante do
+          projeto.
+        </p>
+      </div>
+
+      <div className="h-px bg-zinc-800" />
+
       {/* Campos principais do formulário */}
+      {/* Aqui ficam os dados que entram diretamente no prompt da IA. */}
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-2">
           <label className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
@@ -257,6 +292,7 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
       <div className="h-px bg-zinc-800" />
 
       {/* Seleção de template */}
+      {/* Cada template muda a forma de organizar o README, sem alterar os dados coletados. */}
       <div className="flex flex-col gap-3">
         <label className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
           Template
@@ -283,6 +319,7 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
       <div className="h-px bg-zinc-800" />
 
       {/* Seleção de seções */}
+      {/* O usuário escolhe quais blocos o README final deve incluir. */}
       <div className="flex flex-col gap-3">
         <label className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
           Seções
