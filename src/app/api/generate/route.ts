@@ -2,7 +2,7 @@ import { generateReadme } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-// Define o tipo dos dados que essa rota espera receber no body da requisição
+// Request interface defining expected client-side form submission payload parameters
 interface GenerateRequestBody {
   name: string;
   stack: string;
@@ -14,11 +14,11 @@ interface GenerateRequestBody {
   language: string;
   sections: string[];
   template: string;
-  repoUrl?: string; // opcional — só preenchido se o usuário informar um repo do GitHub
+  repoUrl?: string; // Optional context source tracking vector injected upon GitHub repo bootstrap
 }
 
 function getLanguageInstruction(language: string): string {
-  // Traduz a escolha do seletor para uma instrução clara no prompt.
+  // Mapping client locale keys to explicit instructions optimized for the LLM system prompt.
   if (language === "pt-BR") return "Portuguese (Brazilian Portuguese)";
   if (language === "en-US") return "English";
   return "the same language most consistent with the repository content";
@@ -26,7 +26,7 @@ function getLanguageInstruction(language: string): string {
 
 export async function POST(req: NextRequest) {
   try {
-    // Extrai os dados enviados pelo formulário
+    // Intercept incoming payload from client generation dispatcher
     const body: GenerateRequestBody = await req.json();
 
     const {
@@ -43,18 +43,16 @@ export async function POST(req: NextRequest) {
       repoUrl,
     } = body;
 
-    // Validação básica — nome e descrição são obrigatórios.
-    // São os campos mínimos para a IA ter contexto suficiente sem gerar ruído.
+    // Guard clauses enforcing base contextual data requirements to guarantee generation quality.
     if (!name || !description) {
       return NextResponse.json(
-        { error: "Nome e descrição são obrigatórios" },
+        { error: "Project Name and Description are required" },
         { status: 400 }
       );
     }
 
-    // Monta o prompt que será enviado para o generateReadme.
-    // A ideia aqui é transformar o estado do formulário em instruções objetivas para a IA,
-    // reduzindo ambiguidades e forçando a saída no idioma escolhido.
+    // Composing standard LLM generation prompt.
+    // Encapsulating structured instructions to enforce strict output localized formatting.
     const prompt = `
       You are a technical writer. Generate a professional, well-structured README.md in Markdown for the following project.
 
@@ -82,12 +80,10 @@ export async function POST(req: NextRequest) {
       - Output ONLY the raw Markdown, no explanation, no code fences
     `;
 
-    // Chama o generateReadme() e aguarda o README gerado.
-    // O retorno já vem pronto para salvar no banco e exibir no preview.
+    // Await completion buffer from remote Groq SDK inference endpoint
     const content = await generateReadme(prompt);
 
-    // Salva o README gerado no banco de dados para o histórico.
-    // Isso permite voltar depois e editar/exportar sem refazer a geração.
+    // Persisting snapshot payload natively to SQL workspace storage to permit asynchronous reference
     const readme = await prisma.readme.create({
       data: {
         title: name,
@@ -97,12 +93,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Retorna o README gerado e o id salvo no banco
+    // Outputting successfully processed document string alongside database reference scalar
     return NextResponse.json({ content, id: readme.id });
   } catch (error) {
-    console.error("[generate] Erro ao gerar README:", error);
+    console.error("[generate] Error generating README:", error);
     return NextResponse.json(
-      { error: "Erro interno ao gerar o README" },
+      { error: "Internal service error during generation lifecycle" },
       { status: 500 }
     );
   }

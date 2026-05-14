@@ -8,8 +8,8 @@ interface ReadmePreviewProps {
 }
 
 export default function ReadmePreview({ content }: ReadmePreviewProps) {
-  // Componentes customizados para renderizar corretamente o markdown
-  // Cada elemento markdown recebe um estilo específico para ficar legível no tema escuro.
+  // Custom element rendering configurations mapping markdown syntax nodes to localized design system tokens.
+  // Enhances readability and aesthetics against the dark palette background.
   const components: Partial<Components> = {
     h1: ({ children }: { children?: ReactNode }) => (
       <h1 className="text-2xl font-bold text-white border-b border-zinc-700 pb-2 mb-4 mt-6">
@@ -74,13 +74,12 @@ export default function ReadmePreview({ content }: ReadmePreviewProps) {
     ),
     hr: () => <hr className="border-zinc-700 my-6" />,
     img: ({ src, alt }: { src?: string | Blob; alt?: string }) => {
-      // Detecta se a imagem é um badge do shields.io para aplicar um estilo diferente (menor e inline)
-      const imageSrc = typeof src === "string" ? src : ""; // O ReactMarkdown pode passar um Blob para src, mas nesse caso não temos como renderizar a imagem, então tratamos como string vazia
-      const isBadge = imageSrc?.includes("shields.io"); // Badges do shields.io geralmente têm URLs que incluem "shields.io"
+      // Identifying inline badge assets dynamically to prevent excessive width allocation.
+      const imageSrc = typeof src === "string" ? src : "";
+      const isBadge = imageSrc?.includes("shields.io");
 
       return (
-        // Desabilitamos a regra do Next.js que exige o uso do componente Image para otimização, porque o ReactMarkdown pode passar URLs dinâmicos ou Blobs que não funcionam bem com o componente Image.
-        // Além disso, queremos aplicar estilos diferentes para badges, que são imagens pequenas e inline, em vez de imagens grandes e responsivas.
+        // Opting out of next/image optimizations to natively support arbitrary absolute markdown artifact URLs and SVGs
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={imageSrc}
@@ -115,7 +114,7 @@ export default function ReadmePreview({ content }: ReadmePreviewProps) {
 
   return (
     <div className="flex flex-col gap-3 h-full">
-      {/* O preview fica sempre ao lado do editor para mostrar o resultado final imediatamente. */}
+      {/* Side-by-side split container ensuring instantaneous output verification */}
       <span className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
         Preview
       </span>
