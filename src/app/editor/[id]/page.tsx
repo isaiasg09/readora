@@ -7,24 +7,25 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function EditorPage() {
-  // Pega o id da URL — ex: /editor/abc123 → id = "abc123"
+  // Extracting active database target identifier parameter from routing hooks.
+  // Example: /editor/abc123 -> id = "abc123"
   const { id } = useParams<{ id: string }>();
 
-  // Estado local do README carregado da API e feedback de carregamento/erro.
+  // Buffer holding dynamic state vectors for server persistence records alongside layout loading states.
   const [readme, setReadme] = useState<Readme | null>(null);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Busca o README pelo id ao carregar a página
+  // Resolving record snapshot content asynchronously upon component initialization.
   useEffect(() => {
     async function fetchReadme() {
       try {
-        // Esta rota devolve o conteúdo salvo para permitir edição posterior.
+        // Invoking direct storage retrieval endpoint to hydrate localized client editors.
         const res = await fetch(`/api/readme/${id}`);
 
         if (!res.ok) {
-          setError("README não encontrado.");
+          setError("Document record not found.");
           return;
         }
 
@@ -32,7 +33,7 @@ export default function EditorPage() {
         setReadme(data);
         setContent(data.content);
       } catch {
-        setError("Erro ao carregar README.");
+        setError("Error connecting to data storage service.");
       } finally {
         setLoading(false);
       }
@@ -41,20 +42,20 @@ export default function EditorPage() {
     fetchReadme();
   }, [id]);
 
-  // Atualiza o conteúdo local após salvar no editor
+  // Synchronize local workspace state variables immediately upon client persistence completion.
   function handleSave(newContent: string) {
-    // A página inteira reage ao save porque o preview depende desse mesmo estado.
+    // Elevating state updates upstream to guarantee rendering synchronization across adjacent split panes.
     setContent(newContent);
   }
 
   if (loading) {
-    return <p className="text-zinc-500 text-sm">Carregando...</p>;
+    return <p className="text-zinc-500 text-sm animate-pulse">Loading workspace...</p>;
   }
 
   if (error || !readme) {
     return (
       <p className="text-red-400 text-sm">
-        {error || "README não encontrado."}
+        {error || "Target README document could not be resolved."}
       </p>
     );
   }
@@ -64,12 +65,12 @@ export default function EditorPage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold tracking-tight">{readme.title}</h1>
         <p className="text-zinc-500 text-sm">
-          Edite o README gerado e exporte quando estiver pronto.
+          Fine-tune generated artifact code structures and export markdown client-side.
         </p>
       </div>
 
-      {/* Editor e preview lado a lado em tela cheia */}
-      {/* Esse layout privilegia comparação imediata entre código bruto e renderização final. */}
+      {/* Side-by-side interactive split preview engine layout spanning entire client screen boundaries */}
+      {/* Guarantees zero latency verification rendering code changes instantaneously */}
       <div className="grid grid-cols-2 gap-6">
         <ReadmeEditor id={id} initialContent={content} onSave={handleSave} />
         <ReadmePreview content={content} />

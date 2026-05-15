@@ -2,12 +2,24 @@ import { generateReadme } from "@/lib/groq";
 import { Octokit } from "@octokit/rest";
 import { NextRequest, NextResponse } from "next/server";
 
-// Inicializa o cliente do GitHub
-// Sem token funciona para repositórios públicos (limite de 60 req/hora)
-const octokit = new Octokit();
+// Feature flag to globally toggle verbose ingestion logs and LLM trace outputs.
+const DEBUG = false;
 
-// Arquivos que vamos tentar ler do repositório para dar contexto à IA
-// A ordem importa — os mais relevantes primeiro
+// Instantiating dynamic Octokit client factories to perfectly inject runtime credentials.
+// Bypasses static caching issues across dev hot reloads while forcing native Next.js custom fetch adapters.
+function getOctokit() {
+  return new Octokit({
+    auth: process.env.GITHUB_TOKEN,
+    request: {
+      fetch: (url: RequestInfo | URL, opts?: RequestInit) => {
+        return fetch(url, { ...opts, cache: "no-store" });
+      },
+    },
+  });
+}
+
+// Priority array defining candidate package/manifest configurations to seed contextual heuristics.
+// Ordered sequentially by parsing confidence to optimize document extraction logic.
 const RELEVANT_FILES = [
   "package.json",
   "pyproject.toml",
@@ -29,8 +41,8 @@ type RepositoryAnalysis = {
   usage: string;
 };
 
-// Extrai o dono e o nome do repositório a partir da URL do GitHub
-// Ex: "https://github.com/joao/meu-projeto" → { owner: "joao", repo: "meu-projeto" }
+// Extracts owner namespace and repository identifier parameters from raw input URIs.
+// Example: "https://github.com/facebook/react" -> { owner: "facebook", repo: "react" }
 function parseGithubUrl(url: string): { owner: string; repo: string } | null {
   try {
     const { pathname } = new URL(url);
@@ -44,37 +56,34 @@ function parseGithubUrl(url: string): { owner: string; repo: string } | null {
   }
 }
 
-// Tenta buscar o conteúdo de um arquivo no repositório
-// Retorna null se o arquivo não existir
+// Asynchronously accesses remote Git object trees to extract specified path blobs.
+// Gracefully resolves to null upon encountering HTTP 404 boundaries to support sparse tree traversal.
 async function fetchFileContent(
+  client: Octokit,
   owner: string,
   repo: string,
   path: string
 ): Promise<string | null> {
   try {
-    const response = await octokit.repos.getContent({ owner, repo, path });
+    const response = await client.repos.getContent({ owner, repo, path });
 
-    // A API do GitHub retorna o conteúdo em base64
+    // GitHub REST layer payloads encode non-directory target contents using standard Base64 payloads.
     if (
       "content" in response.data &&
-      typeof response.data.content === "string" // Garantia de que content é uma string (pode ser um array se for um diretório, mas nesse caso não esperamos isso)
+      typeof response.data.content === "string"
     ) {
-      // console.log(`[github] Arquivo "${path}" encontrado em ${owner}/${repo}`);
       return Buffer.from(response.data.content, "base64").toString("utf-8");
     }
 
     return null;
   } catch {
-    // Arquivo não encontrado — ignora e segue para o próximo
-    // console.log(
-    //   `[github] Arquivo "${path}" não encontrado em ${owner}/${repo}`
-    // );
+    // Suppress discrete missing artifact events to proceed evaluating downstream fallback candidates.
     return null;
   }
 }
 
 function truncateContent(content: string, limit = 3000): string {
-  // Evita enviar arquivos gigantes para o modelo quando não é necessário.
+  // Enforcing sliding window substring boundaries to respect context window token limitations.
   return content.length <= limit ? content : `${content.slice(0, limit)}\n...`;
 }
 
@@ -85,7 +94,7 @@ function extractFromPackageJson(content: string): {
   descriptionHint: string;
 } {
   try {
-    // O package.json é a melhor pista para descobrir stack, scripts e comando de instalação.
+    // Parsing native NPM/Node manifest schemas to deterministically resolve execution scripts and dependencies.
     const packageJson = JSON.parse(content) as {
       packageManager?: string;
       scripts?: Record<string, string>;
@@ -103,7 +112,7 @@ function extractFromPackageJson(content: string): {
           : "npm install";
 
     const scripts = packageJson.scripts ?? {};
-    // Escolhe o script mais provável para execução local, priorizando desenvolvimento.
+    // Prioritizing primary local development loops to populate workspace execution steps.
     const usage = scripts.dev
       ? `${install.startsWith("npm") ? "npm" : install.split(" ")[0]} run dev`
       : scripts.start
@@ -134,13 +143,114 @@ function extractFromPackageJson(content: string): {
   }
 }
 
+function extractFromPython(
+  pyproject: string | undefined,
+  requirements: string | undefined
+): {
+  install: string;
+  usage: string;
+  stack: string;
+  descriptionHint: string;
+} {
+  let install = "pip install -r requirements.txt";
+  let usage = "python main.py";
+  let descriptionHint = "";
+
+  if (pyproject) {
+    if (pyproject.includes("[tool.poetry]")) {
+      install = "poetry install";
+      usage = "poetry run python main.py";
+    } else if (pyproject.includes("[project]")) {
+      install = "pip install .";
+    }
+    // Attempt basic parsing of description/name if present
+    const descMatch = pyproject.match(/description\s*=\s*["']([^"']+)["']/i);
+    if (descMatch && descMatch[1]) {
+      descriptionHint = descMatch[1];
+    }
+  } else if (requirements) {
+    install = "pip install -r requirements.txt";
+  }
+
+  return {
+    install,
+    usage,
+    stack: "Python",
+    descriptionHint,
+  };
+}
+
+function extractFromRust(content: string): {
+  install: string;
+  usage: string;
+  stack: string;
+  descriptionHint: string;
+} {
+  let descriptionHint = "";
+  const descMatch = content.match(/description\s*=\s*["']([^"']+)["']/i);
+  if (descMatch && descMatch[1]) {
+    descriptionHint = descMatch[1];
+  }
+
+  return {
+    install: "cargo build",
+    usage: "cargo run",
+    stack: "Rust",
+    descriptionHint,
+  };
+}
+
+function extractFromGo(content: string): {
+  install: string;
+  usage: string;
+  stack: string;
+  descriptionHint: string;
+} {
+  let descriptionHint = "";
+  const modMatch = content.match(/module\s+([^\s]+)/i);
+  if (modMatch && modMatch[1]) {
+    descriptionHint = `Go module: ${modMatch[1]}`;
+  }
+
+  return {
+    install: "go mod download",
+    usage: "go run .",
+    stack: "Go",
+    descriptionHint,
+  };
+}
+
+function extractFromPhp(content: string): {
+  install: string;
+  usage: string;
+  stack: string;
+  descriptionHint: string;
+} {
+  let descriptionHint = "";
+  try {
+    const parsed = JSON.parse(content) as { description?: string };
+    if (parsed.description) {
+      descriptionHint = parsed.description;
+    }
+  } catch {
+    // Ignore JSON parse errors for heuristic extraction
+  }
+
+  return {
+    install: "composer install",
+    usage: "php -S localhost:8000",
+    stack: "PHP",
+    descriptionHint,
+  };
+}
+
 function extractReadmeHint(content: string): {
   descriptionHint: string;
   install: string;
   usage: string;
 } {
-  // Faz uma leitura leve do README para reaproveitar trechos que normalmente já
-  // apontam instalação, uso e uma descrição melhor do projeto.
+  // Lightweight native string scanner scanning existing Markdown block elements to harvest initial sections.
+  // Serves as an immediate zero-latency extraction pass bypassing remote compute logic.
   const lines = content.split(/\r?\n/).map((line) => line.trim());
   const cleaned = lines.filter((line) => line && !/^!\[.*\]\(.*\)$/.test(line));
 
@@ -186,32 +296,41 @@ function extractReadmeHint(content: string): {
 function buildFallbackAnalysis(
   repoName: string,
   repoDescription: string,
-  packageHints: ReturnType<typeof extractFromPackageJson>,
+  stackHints: {
+    install: string;
+    usage: string;
+    stack: string;
+    descriptionHint: string;
+  },
   readmeHints: ReturnType<typeof extractReadmeHint>
 ): RepositoryAnalysis {
-  // Se a IA não responder com JSON válido, usamos um fallback determinístico.
+  // Composing structural fallback objects if remote LLM parsing yields malformed scalar responses.
   const description =
     readmeHints.descriptionHint ||
-    packageHints.descriptionHint ||
+    stackHints.descriptionHint ||
     repoDescription ||
     repoName;
 
   return {
     description,
-    install: readmeHints.install || packageHints.install,
-    usage: readmeHints.usage || packageHints.usage,
+    install: readmeHints.install || stackHints.install,
+    usage: readmeHints.usage || stackHints.usage,
   };
 }
 
 function parseAnalysisResponse(content: string): RepositoryAnalysis | null {
   try {
-    const normalized = content
-      .trim()
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/\s*```$/, "");
+    // Locating raw JSON boundaries dynamically via bounding brace lookup indices.
+    // Guarantees reliable payload resolution even if models prepend polite conversational strings.
+    const firstBrace = content.indexOf("{");
+    const lastBrace = content.lastIndexOf("}");
 
-    const parsed = JSON.parse(normalized) as Partial<RepositoryAnalysis>;
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+      return null;
+    }
+
+    const jsonSubstring = content.slice(firstBrace, lastBrace + 1);
+    const parsed = JSON.parse(jsonSubstring) as Partial<RepositoryAnalysis>;
 
     if (!parsed.description || !parsed.install || !parsed.usage) {
       return null;
@@ -232,29 +351,58 @@ async function analyzeRepository(
   repoDescription: string,
   files: RepoFile[]
 ): Promise<RepositoryAnalysis> {
-  // A ideia dessa etapa é usar os arquivos lidos como contexto estruturado
-  // antes de chamar a IA principal da geração do README.
-  const packageJson = files.find(
-    (file) => file.file === "package.json"
+  // Cross-referencing fetched manifests to assemble highly coherent input directives
+  // prior to issuing requests to the core secondary document generation AI model.
+  const packageJson = files.find((f) => f.file === "package.json")?.content;
+  const pyproject = files.find((f) => f.file === "pyproject.toml")?.content;
+  const requirements = files.find(
+    (f) => f.file === "requirements.txt"
   )?.content;
-  const readme = files.find((file) => file.file === "README.md")?.content;
+  const cargoToml = files.find((f) => f.file === "Cargo.toml")?.content;
+  const goMod = files.find((f) => f.file === "go.mod")?.content;
+  const composerJson = files.find((f) => f.file === "composer.json")?.content;
+  const readme = files.find((f) => f.file === "README.md")?.content;
 
-  const packageHints = packageJson
-    ? extractFromPackageJson(packageJson)
-    : {
-        install: "npm install",
-        usage: "npm run dev",
-        stack: "JavaScript/TypeScript",
-        descriptionHint: "",
-      };
+  let stackHints = {
+    install: "npm install",
+    usage: "npm run dev",
+    stack: "JavaScript/TypeScript",
+    descriptionHint: "",
+  };
+
+  let activeManifestName = "package.json";
+  let activeManifestContent = packageJson;
+
+  if (packageJson) {
+    stackHints = extractFromPackageJson(packageJson);
+    activeManifestName = "package.json";
+    activeManifestContent = packageJson;
+  } else if (pyproject || requirements) {
+    stackHints = extractFromPython(pyproject, requirements);
+    activeManifestName = pyproject ? "pyproject.toml" : "requirements.txt";
+    activeManifestContent = pyproject || requirements;
+  } else if (cargoToml) {
+    stackHints = extractFromRust(cargoToml);
+    activeManifestName = "Cargo.toml";
+    activeManifestContent = cargoToml;
+  } else if (goMod) {
+    stackHints = extractFromGo(goMod);
+    activeManifestName = "go.mod";
+    activeManifestContent = goMod;
+  } else if (composerJson) {
+    stackHints = extractFromPhp(composerJson);
+    activeManifestName = "composer.json";
+    activeManifestContent = composerJson;
+  }
 
   const readmeHints = readme
     ? extractReadmeHint(readme)
     : { descriptionHint: "", install: "", usage: "" };
+
   const fallback = buildFallbackAnalysis(
     repoName,
     repoDescription,
-    packageHints,
+    stackHints,
     readmeHints
   );
 
@@ -269,10 +417,10 @@ Return ONLY valid JSON with the exact shape:
 }
 
 Rules:
-- Use the repository README and package.json to infer the best values.
+- Use the repository README and primary project manifest (${activeManifestName}) to infer the best values.
 - Prefer commands mentioned in the files.
 - If install or usage are explicit in README, use them.
-- If not explicit, infer the most likely command from scripts/package manager.
+- If not explicit, infer the most likely command from scripts/package manager standard conventions.
 - Description should be a concise but useful summary based on the repository files, not just the GitHub description.
 - Do not wrap the response in markdown fences.
 
@@ -282,20 +430,44 @@ The final README generation uses a separate prompt later in the flow.
 Repository name: ${repoName}
 Repository description: ${repoDescription || "not provided"}
 
-package.json:
-${packageJson ? truncateContent(packageJson) : "not found"}
+${activeManifestName}:
+${activeManifestContent ? truncateContent(activeManifestContent) : "not found"}
 
 README.md:
 ${readme ? truncateContent(readme) : "not found"}
 `.trim();
 
   try {
-    // A IA funciona como refinamento: ela organiza o que já foi lido dos arquivos.
+    if (files.length === 0) {
+      if (DEBUG) console.log("[github] Bypassing AI generation: No files available in offline/fallback state.");
+      return fallback;
+    }
+
+    if (DEBUG) {
+      console.log("\n=================== [AI PRE-ANALYSIS PROMPT] ===================");
+      console.log(analysisPrompt);
+      console.log("===============================================================\n");
+    }
+
+    // Issuing synchronous analytical pre-processing context inferences to structure disparate file states.
     const analysisText = await generateReadme(analysisPrompt);
+
+    if (DEBUG) {
+      console.log("\n=================== [AI RAW OUTPUT] ===================");
+      console.log(analysisText);
+      console.log("=======================================================\n");
+    }
+
     const parsed = parseAnalysisResponse(analysisText);
 
+    if (DEBUG) {
+      console.log("\n=================== [AI PARSED JSON RESULT] ===================");
+      console.log(JSON.stringify(parsed, null, 2));
+      console.log("===============================================================\n");
+    }
+
     if (!parsed) {
-      // Se a IA responder algo fora do formato esperado, caímos no fallback sem interromper o fluxo.
+      // Revert instantly to native static deterministic fallbacks to preserve client pipeline execution.
       return fallback;
     }
 
@@ -304,81 +476,132 @@ ${readme ? truncateContent(readme) : "not found"}
       install: parsed.install || fallback.install,
       usage: parsed.usage || fallback.usage,
     };
-  } catch {
+  } catch (aiError) {
+    console.error("[github] AI Pre-analysis exception encountered:", aiError);
     return fallback;
   }
 }
 
-// Rota POST para receber a URL do repositório, buscar os dados e arquivos relevantes, e retornar um contexto para o frontend
+// Ingestion controller bootstrapping repository analysis workflows from client provided target vectors.
 export async function POST(req: NextRequest) {
   try {
     const { url } = await req.json();
 
     if (!url) {
-      return NextResponse.json({ error: "URL não informada" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing Target URL" },
+        { status: 400 }
+      );
     }
 
-    // Extrai owner e repo da URL para transformar a URL pública em parâmetros de API.
+    // Resolving raw web links into discrete Octokit API identification tuples.
     const parsed = parseGithubUrl(url);
 
     if (!parsed) {
       return NextResponse.json(
-        { error: "URL do GitHub inválida" },
+        { error: "Invalid GitHub Repository Link" },
         { status: 400 }
       );
     }
 
     const { owner, repo } = parsed;
 
-    // Busca informações gerais do repositório (descrição, linguagem, licença etc.).
-    // Esses metadados ajudam a completar o formulário antes mesmo de analisar os arquivos.
-    const { data: repoData } = await octokit.repos.get({ owner, repo });
+    // Dynamically instantiate authenticated Octokit client per request execution trace.
+    const client = getOctokit();
 
-    // Tenta ler cada arquivo relevante em paralelo para ser mais rápido.
-    // Aqui buscamos sinais práticos de uso do projeto, não apenas metadados do GitHub.
-    const fileContents = await Promise.all(
-      RELEVANT_FILES.map(async (file) => {
-        const content = await fetchFileContent(owner, repo, file);
-        return content ? { file, content } : null;
-      })
-    );
+    let isOfflineFallback = false;
 
-    // Remove os arquivos que não foram encontrados
-    const foundFiles = fileContents.filter(Boolean) as RepoFile[];
+    try {
+      // Diagnostic check validating authenticated context access and API connectivity metrics.
+      const authTarget = await client.rest.users.getAuthenticated();
+      if (DEBUG) {
+        console.log("[github] Authenticated successfully as:", authTarget.data.login);
+        const limits = await client.rest.rateLimit.get();
+        console.log("[github] Remaining Core Requests:", limits.data.resources.core.remaining);
+      }
+    } catch (authError) {
+      if (DEBUG) {
+        console.warn("[github] Early authentication connectivity test timed out. Forcing offline fallback mode instantly to bypass redundant connection blocks.");
+      }
+      isOfflineFallback = true;
+    }
 
-    // Usa os arquivos mais importantes para inferir instalação, uso e uma descrição melhor.
-    // Esse contexto é o que alimenta o pré-preenchimento do formulário.
+    let repoName = repo;
+    let repoDescription = "";
+    let language = "";
+    let licenseId = "MIT";
+    let stars = 0;
+    let authorName = owner;
+    let authorAvatar = "";
+    let authorUrl = `https://github.com/${owner}`;
+
+    let foundFiles: RepoFile[] = [];
+
+    // If online connectivity is verified, query main repository payload attributes.
+    // If unreachable, bypass secondary round-trip delays immediately to preserve client UI continuity.
+    if (!isOfflineFallback) {
+      try {
+        const { data: repoData } = await client.repos.get({ owner, repo });
+        repoName = repoData.name;
+        repoDescription = repoData.description ?? "";
+        language = repoData.language ?? "";
+        licenseId = repoData.license?.spdx_id ?? "MIT";
+        stars = repoData.stargazers_count ?? 0;
+        authorName = repoData.owner.login;
+        authorAvatar = repoData.owner.avatar_url;
+        authorUrl = repoData.owner.html_url;
+      } catch (repoError) {
+        if (DEBUG) {
+          console.warn(
+            "[github] Secondary repository query failed, reverting to offline wrapper parameters:",
+            repoError
+          );
+        }
+        isOfflineFallback = true;
+      }
+
+      if (!isOfflineFallback) {
+        const fileContents = await Promise.all(
+          RELEVANT_FILES.map(async (file) => {
+            const content = await fetchFileContent(client, owner, repo, file);
+            return content ? { file, content } : null;
+          })
+        );
+        foundFiles = fileContents.filter(Boolean) as RepoFile[];
+      }
+    }
+
+    // Executing heuristic synthesis loop to output highly coherent project instructions.
     const analysis = await analyzeRepository(
-      repoData.name,
-      repoData.description ?? "",
+      repoName,
+      repoDescription,
       foundFiles
     );
 
-    // Monta um resumo do repositório para enviar de volta ao frontend.
-    // O frontend usa isso para preencher campos e deixar a geração menos manual.
+    // Yielding aggregated structured metadata maps downstream to pre-populate reactive form views.
     const context = {
-      name: repoData.name,
+      name: repoName,
       description: analysis.description,
       install: analysis.install,
       usage: analysis.usage,
-      language: repoData.language ?? "",
-      license: repoData.license?.spdx_id ?? "MIT",
-      stars: repoData.stargazers_count,
+      language,
+      license: licenseId,
+      stars,
       files: foundFiles,
       author: {
-        name: repoData.owner.login,
-        avatar: repoData.owner.avatar_url,
-        url: repoData.owner.html_url,
+        name: authorName,
+        avatar: authorAvatar,
+        url: authorUrl,
       },
     };
 
     return NextResponse.json(context);
   } catch (error) {
-    console.error("[github] Erro ao buscar repositório:", error);
+    console.error("[github] Error fetching remote repository context:", error);
     return NextResponse.json(
       {
         error:
-          "Erro ao buscar repositório. Verifique se o repositório é público.",
+          "Error retrieving repository context. Please verify that the repository is public.",
       },
       { status: 500 }
     );

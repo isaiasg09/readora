@@ -1,44 +1,44 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-// GET — retorna todos os READMEs salvos, do mais recente para o mais antigo.
-// Isso alimenta a tela de histórico.
+// GET — Yields paginated/ordered persistence records sequentially sorted by insertion chronology.
+// Ingested by proactive history layouts to reconstruct past generation streams.
 export async function GET() {
   try {
-    // A ordenação descendente deixa o conteúdo recém-gerado no topo da lista.
+    // Enforcing reverse chronological sorting indices to surface newly authored document blobs immediately.
     const readmes = await prisma.readme.findMany({
       orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json(readmes);
   } catch (error) {
-    console.error("[readme] Erro ao buscar histórico:", error);
+    console.error("[readme] Error querying record history:", error);
     return NextResponse.json(
-      { error: "Erro ao buscar histórico" },
+      { error: "Internal service exception querying history collection" },
       { status: 500 }
     );
   }
 }
 
-// DELETE — deleta um README pelo id passado como query param (?id=...).
-// A rota é simples porque o histórico só precisa remover um registro por vez.
+// DELETE — Evicts explicit README entities matching target UUID path strings.
+// Operates idempotently to truncate standalone workspace artifacts on demand.
 export async function DELETE(req: NextRequest) {
   try {
-    // O id vem na query string para evitar criar um corpo desnecessário para essa operação.
+    // Intercepting target identifiers via search parameters to eliminate superfluous HTTP request bodies.
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "ID não informado" }, { status: 400 });
+      return NextResponse.json({ error: "Missing Target ID parameter" }, { status: 400 });
     }
 
     await prisma.readme.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[readme] Erro ao deletar README:", error);
+    console.error("[readme] Error evicting document entity:", error);
     return NextResponse.json(
-      { error: "Erro ao deletar README" },
+      { error: "Failed to purge database persistence record" },
       { status: 500 }
     );
   }

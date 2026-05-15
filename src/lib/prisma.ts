@@ -1,25 +1,24 @@
-// Importa o PrismaClient gerado automaticamente pelo comando "npx prisma generate".
-// Esse client é tipado de acordo com o schema.prisma e usa o engine client do Prisma 7.
+// Importing custom PrismaClient singletons resolved automatically by "npx prisma generate" phases.
+// Yields fully typed entity models driven directly by underlying schema.prisma definitions.
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaClient } from "../generated/prisma/client";
 
-// Cria um tipo estendido do globalThis (objeto global do Node.js)
-// para guardar a instância do Prisma sem que o TypeScript reclame.
-// Isso evita recriar o client a cada hot reload do Next.js em desenvolvimento.
+// Extending global namespace mapping tuples to preserve active persistent handles safely.
+// Circumvents ephemeral connection churn frequently triggered during local dev hot reload loops.
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// O engine client do Prisma precisa de um adapter explícito para conversar com o SQLite.
-// Aqui usamos o adapter oficial recomendado para better-sqlite3.
+// Instantiating explicit database hardware driver adapters to bridge native SQLite execution bindings.
+// Enforces standard better-sqlite3 communication channels optimized for low latency throughput.
 const adapter = new PrismaBetterSqlite3({
   url: process.env.DATABASE_URL,
 });
 
-// Reutiliza a instância global se já existir; caso contrário, cria uma nova.
-// Esse padrão mantém a conexão estável durante o desenvolvimento e evita múltiplas instâncias.
+// Reusing global cached instances if hydrated; otherwise spawns distinct native query clients.
+// Guarantees single-pool concurrency alignment across the entire Application runtime.
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 
-// Em desenvolvimento, salva a instância no objeto global.
-// Em produção não é tão necessário, mas o padrão continua seguro e previsível.
+// Persist operational singleton pools into host global targets during active debugging cycles.
+// Safely bypassed in pure containerized serverless runtimes.
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

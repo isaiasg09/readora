@@ -23,6 +23,8 @@ export interface ReadmeFormData {
   language: string;
   sections: string[];
   template: string;
+  aiModel: string;
+  chunkedGeneration: boolean;
   repoUrl?: string;
 }
 
@@ -76,6 +78,10 @@ export const TEMPLATES: Template[] = [
   { id: "default", label: "Default", description: "Comprehensive and detailed structure" },
   { id: "minimal", label: "Minimal", description: "Clean, straightforward overview" },
   { id: "detailed", label: "Detailed", description: "In-depth sections with tables and examples" },
+  { id: "creative", label: "Creative", description: "Fun, engaging tone with heavy emoji usage" },
+  { id: "corporate", label: "Corporate", description: "Highly formal, enterprise-grade professional tone" },
+  { id: "startup", label: "Startup", description: "Energetic, value-driven marketing style" },
+  { id: "academic", label: "Academic", description: "Rigorous, methodological, and scientific focus" },
 ];
 
 // Supported open-source licenses for badges and explicit documentation sections.
@@ -85,4 +91,12 @@ export const LICENSES = [
   "GPL-3.0",
   "BSD-3-Clause",
   "Unlicense",
+];
+
+// Available LLM engines configured for documentation generation workloads.
+export const AI_MODELS = [
+  { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Versatile)", description: "Best overall capability and reasoning" },
+  { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B", description: "Exceptional reasoning performance" },
+  { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B (Instant)", description: "Extremely fast generation for simpler tasks" },
+  { id: "mixtral-8x7b-32768", label: "Mixtral 8x7B", description: "Alternative open architecture" },
 ];

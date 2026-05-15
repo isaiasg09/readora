@@ -1,5 +1,5 @@
-// Formata uma data para o padrão brasileiro: dd/mm/aaaa hh:mm.
-// Centralizar isso evita espalhar lógica de apresentação de data pela interface.
+// Renders standard temporal object instances into localized client-facing representations.
+// Abstracting formatting logic centrally to decouple localized layouts from underlying parsing structures.
 export function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",

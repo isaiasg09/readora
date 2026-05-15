@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AI_MODELS,
   GithubContext,
   LICENSES,
   ReadmeFormData,
@@ -28,6 +29,8 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
     language: "pt-BR", // Retaining pt-BR as default output option for convenience
     sections: ["features", "install", "usage", "license", "badges"],
     template: "default",
+    aiModel: "llama-3.3-70b-versatile",
+    chunkedGeneration: false,
   });
 
   // UI state controllers managing asynchronous feedback, error messages, and repository input
@@ -222,7 +225,7 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
             name="description"
             value={form.description}
             onChange={handleChange}
-            placeholder="What the project does in 1-3 sentences..."
+            placeholder="A detailed description of your project, its purpose, and core mechanics..."
             rows={3}
             className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 resize-none"
           />
@@ -288,6 +291,32 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
 
       <div className="h-px bg-zinc-800" />
 
+      {/* Primary Inference Engine Selection */}
+      <div className="flex flex-col gap-3">
+        <label className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
+          AI Model Engine
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          {AI_MODELS.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setForm((prev) => ({ ...prev, aiModel: m.id }))}
+              className={`flex flex-col gap-1 p-3 rounded-lg border text-left transition-colors cursor-pointer ${
+                form.aiModel === m.id
+                  ? "border-indigo-500 bg-indigo-500/10"
+                  : "border-zinc-700 hover:border-zinc-500"
+              }`}
+            >
+              <span className={`text-sm font-medium ${form.aiModel === m.id ? "text-indigo-400" : "text-white"}`}>{m.label}</span>
+              <span className="text-xs text-zinc-500">{m.description}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="h-px bg-zinc-800" />
+
       {/* Structural Template Configuration */}
       {/* Varies layout structure and sections order without mutating source data */}
       <div className="flex flex-col gap-3">
@@ -337,6 +366,44 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="h-px bg-zinc-800" />
+
+      {/* Advanced Generation Architecture Selection */}
+      <div className="flex flex-col gap-3">
+        <label className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
+          Generation Architecture
+        </label>
+        <button
+          type="button"
+          onClick={() => setForm((prev) => ({ ...prev, chunkedGeneration: !prev.chunkedGeneration }))}
+          className={`flex items-start gap-4 p-4 rounded-lg border text-left transition-all cursor-pointer ${
+            form.chunkedGeneration
+              ? "border-indigo-500 bg-indigo-500/10"
+              : "border-zinc-700 bg-zinc-900/50 hover:border-zinc-500"
+          }`}
+        >
+          <div className={`mt-0.5 shrink-0 w-5 h-5 rounded flex items-center justify-center border transition-colors ${
+            form.chunkedGeneration ? "bg-indigo-600 border-indigo-600" : "border-zinc-600 bg-zinc-900"
+          }`}>
+            {form.chunkedGeneration && (
+              <svg viewBox="0 0 14 14" fill="none" className="w-3.5 h-3.5 text-white">
+                <path d="M3 8L6 11L11 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className={`text-sm font-medium transition-colors ${
+              form.chunkedGeneration ? "text-indigo-400" : "text-zinc-200"
+            }`}>
+              Deep Chunked Generation (High Quality)
+            </span>
+            <span className="text-xs text-zinc-500 leading-relaxed">
+              When enabled, the AI generates the README section by section rather than all at once. This avoids AI truncation limits and massively increases depth, but <strong className="font-medium text-zinc-400">may take 30-40 seconds</strong>. Leave disabled for ultra-fast standard generation.
+            </span>
+          </div>
+        </button>
       </div>
 
       {/* Error Feedback Block */}

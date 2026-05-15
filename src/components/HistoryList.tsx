@@ -5,11 +5,11 @@ import { formatDate } from "@/lib/utils";
 import { useState } from "react";
 
 interface HistoryListProps {
-  // Lista de READMEs salvos vindos do servidor
+  // Persistence array containing remote workspace records delivered by parent data feeds
   readmes: Readme[];
-  // Chamada quando o usuário deletar um README para atualizar a lista
+  // Invoked upon successful entity eviction to let parent streams truncate local vectors
   onDelete: (id: string) => void;
-  // Chamada quando o usuário clicar em editar um README
+  // Invoked to transition application context to full-screen editor layouts
   onEdit: (readme: Readme) => void;
 }
 
@@ -18,12 +18,12 @@ export default function HistoryList({
   onDelete,
   onEdit,
 }: HistoryListProps) {
-  // Guarda o id do README que está sendo deletado para mostrar loading no botão certo
-  // Isso evita travar a lista inteira enquanto uma única exclusão acontece.
+  // Caching target deletion key scalars locally to restrict spinners exclusively to active mutations.
+  // Preserves full interactive layout availability across adjacent history entries.
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
-    // Mantém o feedback visual localizado no item que está sendo removido.
+    // Isolating visual state feedback indices cleanly to the specific target block.
     setDeletingId(id);
 
     try {
@@ -32,26 +32,26 @@ export default function HistoryList({
       });
 
       if (!res.ok) {
-        alert("Erro ao deletar README.");
+        alert("Error purging target workspace entity.");
         return;
       }
 
-      // Avisa o componente pai para remover o item da lista
+      // Propagating successful eviction scalar indices upstream to synchronize state loops
       onDelete(id);
     } catch {
-      alert("Erro ao conectar com o servidor.");
+      alert("Error communicating with workspace persistence endpoint.");
     } finally {
       setDeletingId(null);
     }
   }
 
-  // Lista vazia
+  // Gracefully fallback to informative blank canvas viewports if collection buffers yield zero length
   if (readmes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <p className="text-zinc-500 text-sm">Nenhum README gerado ainda.</p>
+        <p className="text-zinc-500 text-sm">No persistent README records generated yet.</p>
         <p className="text-zinc-600 text-xs">
-          Gere seu primeiro README na página principal.
+          Bootstrap your first professional document layer via the primary entry point.
         </p>
       </div>
     );
@@ -64,8 +64,8 @@ export default function HistoryList({
           key={readme.id}
           className="flex items-center justify-between p-4 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-700 transition-colors"
         >
-          {/* Informações do README */}
-          {/* Exibe um resumo rápido para que o histórico funcione como uma vitrine compacta. */}
+          {/* Entity layout payload descriptor */}
+          {/* Surfacing dense meta properties to let rows serve as standalone fast-lookup badges */}
           <div className="flex flex-col gap-1 min-w-0">
             <span className="text-sm font-medium text-white truncate">
               {readme.title}
@@ -74,11 +74,11 @@ export default function HistoryList({
               <span className="text-xs text-zinc-500">
                 {formatDate(new Date(readme.createdAt))}
               </span>
-              {/* Mostra o template usado como badge */}
+              {/* Surfacing chosen generation architecture templates */}
               <span className="text-xs text-zinc-600 bg-zinc-800 px-2 py-0.5 rounded-full">
                 {readme.template}
               </span>
-              {/* Mostra a URL do repo se existir */}
+              {/* Render remote context repository URIs if bound during bootstrap streams */}
               {readme.repoUrl && (
                 <span className="text-xs text-zinc-600 truncate max-w-50">
                   {readme.repoUrl}
@@ -87,21 +87,21 @@ export default function HistoryList({
             </div>
           </div>
 
-          {/* Ações */}
-          {/* Editar e deletar ficam lado a lado para facilitar manutenção do histórico. */}
+          {/* Lifecycle control interfaces */}
+          {/* Side-by-side positioning ensuring minimal mouse trajectory loops */}
           <div className="flex gap-2 shrink-0 ml-4">
             <button
               onClick={() => onEdit(readme)}
               className="px-3 py-1.5 text-sm border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 rounded-lg transition-colors cursor-pointer"
             >
-              Editar
+              Edit
             </button>
             <button
               onClick={() => handleDelete(readme.id)}
               disabled={deletingId === readme.id}
               className="px-3 py-1.5 text-sm border border-red-900 text-red-500 hover:bg-red-900/20 disabled:opacity-40 rounded-lg transition-colors cursor-pointer"
             >
-              {deletingId === readme.id ? "Deletando..." : "Deletar"}
+              {deletingId === readme.id ? "Deleting..." : "Delete"}
             </button>
           </div>
         </div>
