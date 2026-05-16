@@ -1,12 +1,23 @@
 import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/lib/auth";
+import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 
-// GET — Yields paginated/ordered persistence records sequentially sorted by insertion chronology.
-// Ingested by proactive history layouts to reconstruct past generation streams.
+// GET — Returns only the logged-in user's readmes, or 401 if not authenticated.
 export async function GET() {
   try {
-    // Enforcing reverse chronological sorting indices to surface newly authored document blobs immediately.
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Authentication required to access history." },
+        { status: 401 }
+      );
+    }
+
+    // Enforcing reverse chronological sorting indices scoped to the authenticated user.
     const readmes = await prisma.readme.findMany({
+      where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
     });
 
@@ -20,16 +31,27 @@ export async function GET() {
   }
 }
 
-// DELETE — Evicts explicit README entities matching target UUID path strings.
-// Operates idempotently to truncate standalone workspace artifacts on demand.
+// DELETE — Evicts README entities only if they belong to the authenticated user.
 export async function DELETE(req: NextRequest) {
   try {
-    // Intercepting target identifiers via search parameters to eliminate superfluous HTTP request bodies.
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
     if (!id) {
       return NextResponse.json({ error: "Missing Target ID parameter" }, { status: 400 });
+    }
+
+    // Verify ownership before deletion
+    const readme = await prisma.readme.findUnique({ where: { id } });
+
+    if (!readme || readme.userId !== session.user.id) {
+      return NextResponse.json({ error: "Not authorized to delete this README." }, { status: 403 });
     }
 
     await prisma.readme.delete({ where: { id } });

@@ -8,6 +8,7 @@ import {
   SECTIONS,
   TEMPLATES,
 } from "@/lib/types";
+import { useSession } from "next-auth/react";
 import { useState } from "react";
 
 // Component props receiving a callback triggered upon successful README generation
@@ -38,6 +39,10 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
   const [error, setError] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
   const [loadingRepo, setLoadingRepo] = useState(false);
+
+  // User session state
+  const { data: session } = useSession();
+  const isAuth = !!session?.user;
 
   // Updates specific form input fields dynamically
   function handleChange(
@@ -265,7 +270,7 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
             name="author"
             value={form.author}
             onChange={handleChange}
-            placeholder="e.g., johndoe"
+            placeholder="e.g., johndev"
             className="bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500"
           />
         </div>
@@ -308,7 +313,11 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
                   : "border-zinc-700 hover:border-zinc-500"
               }`}
             >
-              <span className={`text-sm font-medium ${form.aiModel === m.id ? "text-indigo-400" : "text-white"}`}>{m.label}</span>
+              <span
+                className={`text-sm font-medium ${form.aiModel === m.id ? "text-indigo-400" : "text-white"}`}
+              >
+                {m.label}
+              </span>
               <span className="text-xs text-zinc-500">{m.description}</span>
             </button>
           ))}
@@ -377,30 +386,67 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
         </label>
         <button
           type="button"
-          onClick={() => setForm((prev) => ({ ...prev, chunkedGeneration: !prev.chunkedGeneration }))}
-          className={`flex items-start gap-4 p-4 rounded-lg border text-left transition-all cursor-pointer ${
-            form.chunkedGeneration
-              ? "border-indigo-500 bg-indigo-500/10"
-              : "border-zinc-700 bg-zinc-900/50 hover:border-zinc-500"
+          disabled={!isAuth}
+          onClick={() =>
+            setForm((prev) => ({
+              ...prev,
+              chunkedGeneration: !prev.chunkedGeneration,
+            }))
+          }
+          className={`flex items-start gap-4 p-4 rounded-lg border text-left transition-all ${
+            !isAuth
+              ? "border-zinc-800 bg-zinc-900/30 opacity-50 cursor-not-allowed"
+              : form.chunkedGeneration
+                ? "border-indigo-500 bg-indigo-500/10 cursor-pointer"
+                : "border-zinc-700 bg-zinc-900/50 hover:border-zinc-500 cursor-pointer"
           }`}
         >
-          <div className={`mt-0.5 shrink-0 w-5 h-5 rounded flex items-center justify-center border transition-colors ${
-            form.chunkedGeneration ? "bg-indigo-600 border-indigo-600" : "border-zinc-600 bg-zinc-900"
-          }`}>
-            {form.chunkedGeneration && (
-              <svg viewBox="0 0 14 14" fill="none" className="w-3.5 h-3.5 text-white">
-                <path d="M3 8L6 11L11 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <div
+            className={`mt-0.5 shrink-0 w-5 h-5 rounded flex items-center justify-center border transition-colors ${
+              form.chunkedGeneration && isAuth
+                ? "bg-indigo-600 border-indigo-600"
+                : "border-zinc-600 bg-zinc-900"
+            }`}
+          >
+            {form.chunkedGeneration && isAuth && (
+              <svg
+                viewBox="0 0 14 14"
+                fill="none"
+                className="w-3.5 h-3.5 text-white"
+              >
+                <path
+                  d="M3 8L6 11L11 3.5"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             )}
           </div>
           <div className="flex flex-col gap-1.5">
-            <span className={`text-sm font-medium transition-colors ${
-              form.chunkedGeneration ? "text-indigo-400" : "text-zinc-200"
-            }`}>
+            <span
+              className={`text-sm font-medium transition-colors flex items-center gap-2 ${
+                form.chunkedGeneration && isAuth
+                  ? "text-indigo-400"
+                  : "text-zinc-200"
+              }`}
+            >
               Deep Chunked Generation (High Quality)
+              {!isAuth && (
+                <span className="text-[10px] uppercase bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full text-zinc-400 tracking-wider">
+                  Requires Login
+                </span>
+              )}
             </span>
             <span className="text-xs text-zinc-500 leading-relaxed">
-              When enabled, the AI generates the README section by section rather than all at once. This avoids AI truncation limits and massively increases depth, but <strong className="font-medium text-zinc-400">may take 30-40 seconds</strong>. Leave disabled for ultra-fast standard generation.
+              When enabled, the AI generates the README section by section
+              rather than all at once. This avoids AI truncation limits and
+              massively increases depth, but{" "}
+              <strong className="font-medium text-zinc-400">
+                may take 30-40 seconds
+              </strong>
+              . Leave disabled for ultra-fast standard generation.
             </span>
           </div>
         </button>
@@ -418,7 +464,7 @@ export default function ReadmeForm({ onGenerate }: ReadmeFormProps) {
       <button
         type="submit"
         disabled={loading}
-        className={`relative group w-full py-4 bg-[length:200%_auto] border border-white/5 hover:border-white/10 text-white font-medium rounded-xl shadow-md shadow-slate-600 active:shadow-none transition-all duration-700 overflow-hidden active:scale-[0.97] ${
+        className={`relative group w-full py-4 bg-size-[200%_auto] border border-white/5 hover:border-white/10 text-white font-medium rounded-xl shadow-md shadow-slate-600 active:shadow-none transition-all duration-700 overflow-hidden active:scale-[0.97] ${
           loading
             ? "bg-linear-to-r from-red-500 via-yellow-400 via-green-500 via-blue-600 via-pink-500 to-purple-600 animate-pulse bg-left hover:bg-right cursor-wait opacity-90"
             : "bg-linear-to-r from-blue-950 via-indigo-950 to-slate-900 bg-left hover:bg-right cursor-pointer"

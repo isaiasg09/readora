@@ -3,13 +3,16 @@
 import ReadmeEditor from "@/components/ReadmeEditor";
 import ReadmePreview from "@/components/ReadmePreview";
 import { Readme } from "@/lib/types";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { LockIcon } from "@hugeicons/core-free-icons";
 
 export default function EditorPage() {
   // Extracting active database target identifier parameter from routing hooks.
   // Example: /editor/abc123 -> id = "abc123"
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
 
   // Buffer holding dynamic state vectors for server persistence records alongside layout loading states.
   const [readme, setReadme] = useState<Readme | null>(null);
@@ -23,6 +26,11 @@ export default function EditorPage() {
       try {
         // Invoking direct storage retrieval endpoint to hydrate localized client editors.
         const res = await fetch(`/api/readme/${id}`);
+
+        if (res.status === 403) {
+          setError("You don't have permission to view this README.");
+          return;
+        }
 
         if (!res.ok) {
           setError("Document record not found.");
@@ -54,9 +62,22 @@ export default function EditorPage() {
 
   if (error || !readme) {
     return (
-      <p className="text-red-400 text-sm">
-        {error || "Target README document could not be resolved."}
-      </p>
+      <div className="flex flex-col items-center justify-center gap-6 min-h-[50vh]">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+            <HugeiconsIcon icon={LockIcon} size={24} color="#f87171" strokeWidth={1.5} />
+          </div>
+          <p className="text-red-400 text-sm font-medium">
+            {error || "Target README document could not be resolved."}
+          </p>
+        </div>
+        <button
+          onClick={() => router.push("/generate")}
+          className="px-6 py-2.5 text-sm font-medium border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white rounded-lg transition-all cursor-pointer"
+        >
+          ← Back to Generator
+        </button>
+      </div>
     );
   }
 

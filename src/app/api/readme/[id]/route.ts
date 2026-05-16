@@ -1,17 +1,15 @@
 import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/lib/auth";
+import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 
-// GET — Retrieves explicit README entity payloads targeted by primary database identifier tuples.
-// Consumed by standalone editor boundaries to restore local editing snapshots.
+// GET — Retrieves a README by ID. If it belongs to a user, only that user can access it.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Next.js App Router dynamic route parameters are evaluated asynchronously to support streaming middleware.
     const { id } = await params;
-
-    // Fetching unique database record matching active workspace session targets.
     const readme = await prisma.readme.findUnique({ where: { id } });
 
     if (!readme) {
@@ -19,6 +17,17 @@ export async function GET(
         { error: "Target document record not found" },
         { status: 404 }
       );
+    }
+
+    // If the readme has an owner, verify the current user matches
+    if (readme.userId) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user?.id || session.user.id !== readme.userId) {
+        return NextResponse.json(
+          { error: "You do not have permission to view this README." },
+          { status: 403 }
+        );
+      }
     }
 
     return NextResponse.json(readme);
@@ -31,14 +40,12 @@ export async function GET(
   }
 }
 
-// PATCH — Updates underlying storage snapshots for persistent workspace documents.
-// Invoked dynamically by live editing loops to enforce source of truth alignment.
+// PATCH — Updates a README. Only the owner can edit their own readmes.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Intercepting targeted update payloads to mutate raw markdown text fields selectively.
     const { id } = await params;
     const { content } = await req.json();
 
@@ -47,6 +54,23 @@ export async function PATCH(
         { error: "Missing document update payload parameter" },
         { status: 400 }
       );
+    }
+
+    // Verify ownership before allowing edits
+    const readme = await prisma.readme.findUnique({ where: { id } });
+
+    if (!readme) {
+      return NextResponse.json({ error: "README not found" }, { status: 404 });
+    }
+
+    if (readme.userId) {
+      const session = await getServerSession(authOptions);
+      if (!session?.user?.id || session.user.id !== readme.userId) {
+        return NextResponse.json(
+          { error: "You do not have permission to edit this README." },
+          { status: 403 }
+        );
+      }
     }
 
     const updated = await prisma.readme.update({

@@ -1,6 +1,8 @@
 import { generateReadme } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 // Request interface defining expected client-side form submission payload parameters
 interface GenerateRequestBody {
@@ -104,10 +106,13 @@ async function generateSectionContent(
 
 export async function POST(req: NextRequest) {
   try {
+    // Authenticate user to enforce rate limits and conditional access logic
+    const session = await getServerSession(authOptions);
+
     // Intercept incoming payload from client generation dispatcher
     const body: GenerateRequestBody = await req.json();
 
-    const {
+    let {
       name,
       stack,
       description,
@@ -122,6 +127,12 @@ export async function POST(req: NextRequest) {
       chunkedGeneration,
       repoUrl,
     } = body;
+
+    // Enforce business rules: unauthenticated users cannot use expensive chunking
+    if (!session && chunkedGeneration) {
+      console.log("[generate] Anonymous request detected. Forcing monolithic fallback.");
+      chunkedGeneration = false;
+    }
 
     // Guard clauses enforcing base contextual data requirements to guarantee generation quality.
     if (!name || !description) {
@@ -195,6 +206,7 @@ export async function POST(req: NextRequest) {
         content: finalContent,
         template,
         repoUrl: repoUrl ?? null,
+        userId: session?.user?.id ?? null,
       },
     });
 
